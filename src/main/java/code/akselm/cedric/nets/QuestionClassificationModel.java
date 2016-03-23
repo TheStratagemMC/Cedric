@@ -10,6 +10,7 @@ import org.deeplearning4j.berkeley.Pair;
 import org.deeplearning4j.models.embeddings.inmemory.InMemoryLookupTable;
 import org.deeplearning4j.models.paragraphvectors.ParagraphVectors;
 import org.deeplearning4j.models.word2vec.VocabWord;
+import org.deeplearning4j.optimize.solvers.StochasticGradientDescent;
 import org.deeplearning4j.text.documentiterator.LabelAwareIterator;
 import org.deeplearning4j.text.documentiterator.LabelledDocument;
 import org.deeplearning4j.text.tokenization.tokenizer.preprocessor.CommonPreprocessor;
@@ -20,21 +21,22 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.*;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 
 /**
  * Created by Axel on 3/20/2016.
  */
-public class QuestionClassificationModel extends SavableNet{
+public class QuestionClassificationModel extends SavableNet {
     private static final Logger log = LoggerFactory.getLogger(QuestionClassificationModel.class);
     ParagraphVectors paragraphVectors;
+    List<String> labelsUsed = new ArrayList<>();
 
-    public QuestionClassificationModel(){
-        if (Cedric.getDataManager().exists("nets", "question_classification")){
+    public QuestionClassificationModel() {
+        if (Cedric.getDataManager().exists("nets", "question_classification")) {
             load(Cedric.getDataManager().get("nets", "question_classification"));
-        }
-        else {
+        } else {
             try {
                 ClassPathResource resource = new ClassPathResource("training");
 
@@ -50,7 +52,7 @@ public class QuestionClassificationModel extends SavableNet{
 
                 // ParagraphVectors training configuration
                 paragraphVectors = new ParagraphVectors.Builder()
-                        .learningRate(0.025)
+                        .learningRate(0.03)
                         .minLearningRate(0.001)
                         .batchSize(1000)
                         .epochs(20)
@@ -106,33 +108,55 @@ public class QuestionClassificationModel extends SavableNet{
         }
     }
 
-    public void load(HashMap<String,Serializable> map){
-        try{
-            byte[] bytes = (byte[])map.get("net");
+    public void load(HashMap<String, Serializable> map) {
+        try {
+            byte[] bytes = (byte[]) map.get("net");
             ByteArrayInputStream input = new ByteArrayInputStream(bytes);
             ObjectInputStream is = new ObjectInputStream(input);
-            paragraphVectors = (ParagraphVectors)is.readObject();
+            paragraphVectors = (ParagraphVectors) is.readObject();
             is.close();
             input.close();
-        }catch(Exception e){
+        } catch (Exception e) {
             e.printStackTrace();
         }
     }
 
     @Override
     public byte[] getBytes() {
-        try{
+        try {
             ByteArrayOutputStream out = new ByteArrayOutputStream();
             ObjectOutputStream oo = new ObjectOutputStream(out);
             oo.writeObject(paragraphVectors);
             oo.close();
             return out.toByteArray();
-        }catch(Exception e){
+        } catch (Exception e) {
             e.printStackTrace();
         }
 
         return new byte[0];
     }
+
+    public String getCategory(String input) {
+        // paragraphVectors.predict(input);
+        return null;
+    }
+
+    public void print(String in){
+
+
+        MeansBuilder meansBuilder = new MeansBuilder((InMemoryLookupTable<VocabWord>) paragraphVectors.getLookupTable(), t);
+        LabelSeeker seeker = new LabelSeeker(labelsUsed, (InMemoryLookupTable<VocabWord>) paragraphVectors.getLookupTable());
+
+        LabelledDocument document = new LabelledDocument();
+        document.setContent(in);
+
+            INDArray documentAsCentroid = meansBuilder.documentAsVector(document);
+            List<Pair<String, Double>> scores = seeker.getScores(documentAsCentroid);
+
+
+            log.info("Document '" + document.getLabel() + "' falls into the following categories: ");
+            for (Pair<String, Double> score : scores) {
+                log.info("        " + score.getFirst() + ": " + score.getSecond());
+
+            }
 }
-
-
